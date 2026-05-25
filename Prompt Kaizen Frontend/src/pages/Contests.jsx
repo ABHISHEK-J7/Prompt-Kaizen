@@ -1,0 +1,257 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { useMemo } from 'react';
+import {
+  Trophy, Calendar, Clock, Inbox, CheckCircle2, ChevronRight, Sparkles,
+  Layers, TrendingDown, BarChart3,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import api from '../api/axiosInstance.js';
+
+export default function Contests() {
+  const [contests, setContests] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get('/contests')
+      .then((res) => setContests(res.data.contests || []))
+      .catch((e) => toast.error(e?.response?.data?.message || 'Failed to load contests.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const live      = contests.filter((c) => c.live);
+  const upcoming  = contests.filter((c) => c.upcoming);
+  const past      = contests.filter((c) => c.past);
+
+  const stats = useMemo(() => computeStats(contests), [contests]);
+
+  return (
+    <div className="space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+        className="flex flex-wrap items-end justify-between gap-3"
+      >
+        <div>
+          <span className="chip"><Trophy className="w-3.5 h-3.5" /> Contests</span>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-flame-900">Your contests</h1>
+          <p className="text-flame-500 text-sm">
+            Tests you've been invited to. Live contests can be taken today (IST).
+          </p>
+        </div>
+        <Link to="/contests/leaderboard" className="btn-primary">
+          <Trophy className="w-4 h-4" /> Leaderboard
+        </Link>
+      </motion.div>
+
+      {loading ? (
+        <div className="space-y-2 animate-pulse">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-24 rounded-2xl bg-cream-50/60" />
+          ))}
+        </div>
+      ) : contests.length === 0 ? (
+        <div className="card p-12 text-center">
+          <div className="mx-auto w-12 h-12 rounded-2xl bg-cream-100 text-flame-900 flex items-center justify-center">
+            <Inbox className="w-6 h-6" />
+          </div>
+          <p className="mt-3 font-semibold text-flame-900">No contests assigned</p>
+          <p className="text-sm text-flame-500 mt-1">
+            You'll see contests here once an admin adds your email to one.
+          </p>
+        </div>
+      ) : (
+        <>
+          <StatsStrip stats={stats} />
+          <Section title="Live today" Icon={Sparkles} items={live} live />
+          <Section title="Upcoming" Icon={Calendar} items={upcoming} />
+          <Section title="Past contests" Icon={Trophy} items={past} muted />
+        </>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------- Stats strip -------------------------------- */
+
+function computeStats(contests) {
+  const submitted = contests.filter((c) => c.mySubmission?.status === 'submitted');
+  const scores = submitted.map((c) => c.mySubmission.averageScore || 0);
+  const has = scores.length > 0;
+  return {
+    assigned: contests.length,
+    attended: submitted.length,
+    highest: has ? Math.max(...scores) : 0,
+    lowest:  has ? Math.min(...scores) : 0,
+    average: has ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : 0,
+  };
+}
+
+function StatsStrip({ stats }) {
+  const items = [
+    { label: 'Assigned Contest', value: stats.assigned, Icon: Layers,        variant: 'light' },
+    { label: 'Attended Contest', value: stats.attended, Icon: CheckCircle2,  variant: 'flame',  hint: `of ${stats.assigned}` },
+    { label: 'Highest Score',    value: stats.highest,  suffix: '/100', Icon: Trophy,        variant: 'cream' },
+    { label: 'Lowest Score',     value: stats.lowest,   suffix: '/100', Icon: TrendingDown,  variant: 'light' },
+    { label: 'Average Score',    value: stats.average,  suffix: '/100', Icon: BarChart3,     variant: 'light',
+      hint: stats.attended > 0 ? `Across ${stats.attended} ${stats.attended === 1 ? 'contest' : 'contests'}` : 'No data yet' },
+  ];
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {items.map((it, i) => <StatTile key={it.label} {...it} delay={i * 0.04} />)}
+    </div>
+  );
+}
+
+function StatTile({ label, value, suffix, hint, Icon, variant = 'light', delay = 0 }) {
+  // Same rule as ScoreCard: value dark, /100 suffix orange, icon orange.
+  const cardClasses = {
+    light: 'bg-white border-cream-400 text-flame-900',
+    flame: 'bg-flame-900 border-flame-900 text-cream-100',
+    cream: 'bg-cream-200 border-cream-400 text-flame-900',
+  }[variant];
+  const labelClr  = variant === 'flame' ? 'text-cream-300' : 'text-cream-700';
+  const suffixClr = variant === 'flame' ? 'text-cream-300' : 'text-flame-500';
+  const iconBox   = 'bg-flame-500 text-white';
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay, ease: 'easeOut' }}
+      whileHover={{ y: -2 }}
+      className={`rounded-2xl border shadow-soft p-3.5 transition-shadow hover:shadow-[0_18px_50px_-18px_rgba(33,37,41,0.25)] ${cardClasses}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className={`text-[10px] uppercase tracking-[0.16em] font-semibold ${labelClr} truncate`}>
+          {label}
+        </p>
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${iconBox}`}>
+          <Icon className="w-3.5 h-3.5" strokeWidth={2.4} />
+        </div>
+      </div>
+      <p className="mt-2 text-3xl font-bold tracking-tight leading-none">
+        {value}
+        {suffix ? <span className={`ml-1 text-sm font-semibold ${suffixClr}`}>{suffix}</span> : null}
+      </p>
+      {hint ? <p className={`mt-1.5 text-[10px] ${suffixClr} truncate`}>{hint}</p> : null}
+    </motion.div>
+  );
+}
+
+function Section({ title, Icon, items, live, muted }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="stat-icon"><Icon className="w-5 h-5" /></span>
+        <h3 className="font-semibold text-flame-900">{title}</h3>
+        <span className="badge-cream ml-auto">{items.length}</span>
+      </div>
+      <div className="grid lg:grid-cols-2 gap-3">
+        {items.map((c, i) => <ContestCard key={c._id} c={c} live={live} muted={muted} delay={i * 0.04} />)}
+      </div>
+    </div>
+  );
+}
+
+function ContestCard({ c, live, muted, delay }) {
+  const dateStr = new Date(c.scheduledDate).toLocaleDateString(undefined, {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+  const windowStr = c.startsAt && c.endsAt
+    ? `${new Date(c.startsAt).toLocaleTimeString(undefined, { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false })} – ${new Date(c.endsAt).toLocaleTimeString(undefined, { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false })} IST`
+    : null;
+  const isSubmitted = c.mySubmission?.status === 'submitted';
+  const dark = live || muted;
+
+  const cardClass = live
+    ? 'bg-flame-500 text-white border-flame-600 shadow-[0_18px_40px_-18px_rgba(241,93,35,0.5)]'
+    : muted
+      ? 'bg-[#212529] text-white border-[#0e1114]'
+      : 'bg-white border-flame-50';
+
+  const statusBadge = live
+    ? 'bg-white text-flame-500'
+    : muted
+      ? 'bg-white text-[#212529]'
+      : 'bg-cream-100 text-flame-800 border border-cream-200';
+
+  const leaderboardPill = dark
+    ? 'bg-white/10 border border-white/30 text-white hover:bg-white/20'
+    : 'bg-cream-100 border border-cream-200 text-flame-800 hover:bg-cream-200';
+
+  const secondaryText = dark ? 'text-white/80' : 'text-flame-500';
+  const titleText     = dark ? 'text-white' : 'text-flame-900';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay, ease: 'easeOut' }}
+      whileHover={{ y: -2 }}
+      className={`rounded-2xl border shadow-soft p-5 transition-shadow ${cardClass}`}
+    >
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <span className={`badge ${statusBadge}`}>
+          {live ? 'Live today' : muted ? 'Past' : 'Upcoming'}
+        </span>
+        {isSubmitted && (
+          <span className="badge bg-white text-flame-500">
+            <CheckCircle2 className="w-3 h-3" /> Submitted
+          </span>
+        )}
+      </div>
+      <div className="flex items-start justify-between gap-2">
+        <h4 className={`font-semibold ${titleText} text-lg flex-1 min-w-0`}>
+          {c.title}
+        </h4>
+        <Link
+          to={`/contests/${c._id}/leaderboard`}
+          onClick={(e) => e.stopPropagation()}
+          className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider transition ${leaderboardPill}`}
+          title="View this contest's leaderboard"
+        >
+          <Trophy className="w-3 h-3" /> Leaderboard
+        </Link>
+      </div>
+      {c.description ? (
+        <p className={`text-sm mt-1 ${secondaryText} line-clamp-2`}>
+          {c.description}
+        </p>
+      ) : null}
+      <div className={`mt-3 flex items-center flex-wrap gap-x-3 gap-y-1 text-xs ${secondaryText} font-semibold uppercase tracking-wider`}>
+        <span className="inline-flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {dateStr}</span>
+        {windowStr ? (
+          <span className="inline-flex items-center gap-1.5 tabular-nums">
+            <Clock className="w-3.5 h-3.5" /> {windowStr}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {c.durationMinutes} min</span>
+        )}
+        <span className="inline-flex items-center gap-1.5">{c.scenariosCount} scenarios</span>
+        {isSubmitted && (
+          <span className={`inline-flex items-center gap-1.5 font-bold ${titleText}`}>
+            <Trophy className="w-3.5 h-3.5" /> {c.mySubmission.averageScore}/100
+          </span>
+        )}
+      </div>
+      <div className="mt-4 flex items-center justify-end">
+        {live && !isSubmitted ? (
+          <Link to={`/contests/${c._id}`} className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold bg-white text-flame-500 hover:bg-cream-100 transition">
+            Take contest <ChevronRight className="w-4 h-4" />
+          </Link>
+        ) : (
+          <Link
+            to={`/contests/${c._id}`}
+            className={
+              dark
+                ? 'inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold bg-transparent border border-white/30 text-white hover:bg-white/10 transition'
+                : 'btn-ghost text-sm'
+            }
+          >
+            View details <ChevronRight className="w-4 h-4" />
+          </Link>
+        )}
+      </div>
+    </motion.div>
+  );
+}

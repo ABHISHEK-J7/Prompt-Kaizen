@@ -1,0 +1,91 @@
+@import url('https://rsms.me/inter/inter.css');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Base ---------- */
+
+html, body, #root { height: 100%; }
+
+body {
+  @apply text-flame-900 bg-cream-50/40 antialiased;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+}
+
+::selection { background: theme('colors.flame.500'); color: theme('colors.cream.50'); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: theme('colors.flame.100'); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: theme('colors.flame.200'); }
+
+/* ---------- Components ---------- */
+
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl shadow-soft border border-flame-50 transition-shadow;
+  }
+  .card-hover {
+    @apply hover:shadow-[0_18px_50px_-18px_rgba(33,37,41,0.25)] hover:-translate-y-0.5 transition-all duration-300;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed select-none;
+  }
+  .btn-primary {
+    @apply btn bg-flame-500 text-white hover:bg-flame-600 hover:shadow-[0_10px_30px_-10px_rgba(241,93,35,0.6)] focus:outline-none focus:ring-4 focus:ring-flame-300/50;
+  }
+  .btn-cream {
+    @apply btn bg-cream-100 text-flame-900 hover:bg-cream-200 hover:shadow-[0_10px_30px_-10px_rgba(255,255,255,0.9)] focus:outline-none focus:ring-4 focus:ring-flame-300/40;
+  }
+  .btn-ghost {
+    @apply btn bg-white text-flame-900 border border-flame-100 hover:border-flame-500 hover:bg-cream-50 focus:outline-none focus:ring-4 focus:ring-flame-300/30;
+  }
+  .btn-danger {
+    @apply btn bg-white text-flame-900 border border-flame-100 hover:bg-flame-900 hover:text-cream-100 hover:border-flame-900 px-3 py-1.5 text-xs;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-flame-300 bg-white px-3.5 py-2.5 text-sm text-flame-900 placeholder:text-flame-300
+           transition-all duration-200
+           focus:outline-none focus:border-flame-500 focus:ring-4 focus:ring-flame-300/40;
+  }
+  .input:disabled { @apply bg-cream-50/60 text-flame-300 cursor-not-allowed; }
+
+  .label {
+    @apply block text-xs font-semibold uppercase tracking-wider text-flame-500 mb-1.5;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide;
+  }
+  .badge-cream { @apply badge bg-cream-100 text-flame-800 border border-cream-200; }
+  .badge-flame  { @apply badge bg-flame-900 text-cream-100; }
+  .badge-ghost { @apply badge bg-white text-flame-700 border border-flame-100; }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium bg-cream-100 text-flame-800 border border-cream-200;
+  }
+
+  .stat-icon {
+    @apply w-10 h-10 rounded-xl bg-cream-100 text-flame-900 flex items-center justify-center;
+  }
+
+  .section-title {
+    @apply text-2xl sm:text-3xl font-semibold tracking-tight text-flame-900;
+  }
+
+  .glass {
+    @apply backdrop-blur-md bg-white/75 border border-white/60;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .grid-bg { background-image: theme('backgroundImage.grid-flame'); background-size: 22px 22px; }
+  .shimmer-bg {
+    background-image: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+    background-size: 200% 100%;
+  }
+}

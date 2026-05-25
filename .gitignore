@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node — covers every workspace at any depth
+**/node_modules/
+**/dist/
+
+# Environment files — secrets must never be committed
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Backups left over from monorepo conversion (per-app .git dirs renamed
+# while creating this combined repo). Not meant to be tracked here.
+**/.git.parent-monorepo-backup/

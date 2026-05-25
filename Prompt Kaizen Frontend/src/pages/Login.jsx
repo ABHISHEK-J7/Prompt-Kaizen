@@ -1,0 +1,185 @@
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Mail, Lock, Loader2, LogIn, Eye, EyeOff, Sparkles } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext.jsx';
+import Logo from '../components/Logo.jsx';
+
+export default function Login() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [form, setForm] = useState({ email: '', password: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+
+  const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.email || !form.password) return toast.error('Please fill in all fields.');
+    try {
+      setSubmitting(true);
+      const result = await login(form.email.trim(), form.password);
+      if (result?.needsVerification) {
+        // The server detected this account hasn't verified its email and
+        // sent a fresh OTP. Send the user to the verify-email screen.
+        toast(result.message || 'Please verify your email — we sent you a new code.');
+        navigate('/verify-email', {
+          replace: true,
+          state: { email: result.email || form.email.trim().toLowerCase() },
+        });
+        return;
+      }
+      toast.success('Welcome back!');
+      const to = location.state?.from?.pathname || '/dashboard';
+      navigate(to, { replace: true });
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Login failed.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-[calc(100vh-4rem)] grid lg:grid-cols-2">
+      {/* Left brand panel */}
+      <div className="hidden lg:flex relative items-center justify-center bg-flame-900 text-cream-100 overflow-hidden">
+        <div className="absolute inset-0 bg-mesh opacity-40" />
+        <div
+          className="absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.6) 1px, transparent 0)',
+            backgroundSize: '22px 22px',
+          }}
+        />
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="relative max-w-md p-10"
+        >
+          <Logo size="lg" />
+          <h2 className="mt-6 text-3xl font-bold tracking-tight text-cream-100 text-balance">
+            Welcome back. Let's write your next great prompt.
+          </h2>
+          <p className="mt-3 text-cream-200/70 leading-relaxed">
+            Pick up where you left off — your dashboard, heatmaps, and prompt history are waiting.
+          </p>
+
+          <ul className="mt-8 space-y-3 text-sm">
+            {[
+              'Real-world scenarios, scored deterministically',
+              'Heatmaps that show what is missing',
+              'One-click improved prompt rewrites',
+            ].map((t, i) => (
+              <motion.li
+                key={t}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 + i * 0.08 }}
+                className="flex items-start gap-3"
+              >
+                <span className="mt-0.5 w-5 h-5 rounded-full bg-cream-300 text-flame-900 flex items-center justify-center text-[10px] font-bold">✓</span>
+                <span className="text-cream-100/90">{t}</span>
+              </motion.li>
+            ))}
+          </ul>
+        </motion.div>
+      </div>
+
+      {/* Right form */}
+      <div className="flex items-center justify-center px-4 py-10 bg-cream-50/40">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="w-full max-w-md"
+        >
+          <div className="card p-8">
+            <div className="flex items-center gap-2 text-flame-700">
+              <Sparkles className="w-4 h-4 text-cream-500" />
+              <span className="text-xs uppercase tracking-[0.18em] font-semibold">Sign in</span>
+            </div>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-flame-900">Welcome back</h1>
+            <p className="text-sm text-flame-500 mt-1">Log in to continue improving your prompts.</p>
+
+            <form onSubmit={onSubmit} className="mt-6 space-y-4">
+              <Field
+                label="Email"
+                icon={Mail}
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={onChange}
+                placeholder="you@example.com"
+              />
+              <Field
+                label="Password"
+                icon={Lock}
+                name="password"
+                type={showPass ? 'text' : 'password'}
+                value={form.password}
+                onChange={onChange}
+                placeholder="••••••••"
+                trailing={
+                  <button
+                    type="button"
+                    onClick={() => setShowPass((s) => !s)}
+                    className="text-flame-400 hover:text-flame-900 transition"
+                    aria-label={showPass ? 'Hide password' : 'Show password'}
+                  >
+                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                }
+              />
+
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                type="submit"
+                disabled={submitting}
+                className="btn-primary w-full py-2.5"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin-slow" /> Logging in...
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="w-4 h-4" /> Log in
+                  </>
+                )}
+              </motion.button>
+            </form>
+
+            <p className="mt-6 text-sm text-flame-500 text-center">
+              New here?{' '}
+              <Link to="/register" className="font-semibold text-flame-900 underline-offset-4 hover:underline">
+                Create an account
+              </Link>
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, icon: Icon, trailing, ...inputProps }) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <div className="relative">
+        {Icon ? (
+          <Icon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-flame-300" />
+        ) : null}
+        <input {...inputProps} className={`input ${Icon ? 'pl-9' : ''} ${trailing ? 'pr-9' : ''}`} />
+        {trailing ? (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2">{trailing}</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
