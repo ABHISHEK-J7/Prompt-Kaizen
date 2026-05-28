@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const {
   stats, listUsers, listPrompts,
-  bulkUploadUsers, deleteUser, resetUserPassword,
+  bulkUploadUsers, exportUsers, deleteUser, resetUserPassword,
 } = require('../controllers/adminController');
 const { protect } = require('../middleware/authMiddleware');
 const { adminOnly } = require('../middleware/adminMiddleware');
@@ -19,6 +19,7 @@ router.use(protect, adminOnly);
 
 router.get('/stats', stats);
 router.get('/users', listUsers);
+router.get('/users/export', exportUsers);
 router.post('/users/bulk-upload', upload.single('file'), bulkUploadUsers);
 router.post('/users/:id/reset-password', resetUserPassword);
 router.delete('/users/:id', deleteUser);

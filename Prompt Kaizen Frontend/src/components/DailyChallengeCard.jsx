@@ -75,7 +75,7 @@ export default function DailyChallengeCard() {
               </span>
               <span className="font-bold text-cream-100">{data.mySubmission.overallScore} / 100</span>
               <span className={`badge ${ratingBadgeClass(data.mySubmission.rating)}`}>
-                {data.mySubmission.rating}
+                {data.mySubmission.rating || 'Unrated'}
               </span>
             </div>
           ) : (

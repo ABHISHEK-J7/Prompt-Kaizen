@@ -65,8 +65,6 @@ function validateScenarios(scenarios) {
     const s = scenarios[i] || {};
     if (!s.category || !ALLOWED_CATEGORIES.includes(s.category))
       return `Scenario ${i + 1}: invalid category.`;
-    if (!s.expectedOutputFormat || typeof s.expectedOutputFormat !== 'string')
-      return `Scenario ${i + 1}: expectedOutputFormat is required.`;
     if (!s.scenario || String(s.scenario).trim().length < 10)
       return `Scenario ${i + 1}: scenario text must be at least 10 characters.`;
   }
@@ -203,7 +201,7 @@ const uploadAllowedEmails = async (req, res) => {
     const contest = await Contest.findById(req.params.id);
     if (!contest) return res.status(404).json({ message: 'Contest not found.' });
 
-    const { emails, skipped } = parseEmailsFromBuffer(req.file.buffer);
+    const { emails, skipped, capped } = parseEmailsFromBuffer(req.file.buffer);
 
     const mode = (req.body.mode || 'replace').toLowerCase(); // 'replace' or 'append'
     if (mode === 'append') {
@@ -218,6 +216,7 @@ const uploadAllowedEmails = async (req, res) => {
       contest,
       parsed: emails.length,
       skipped,
+      capped,
       total: contest.allowedEmails.length,
     });
   } catch (err) {

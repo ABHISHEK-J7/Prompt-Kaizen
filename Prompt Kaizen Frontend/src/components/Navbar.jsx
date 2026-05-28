@@ -47,7 +47,7 @@ export default function Navbar() {
         </Link>
 
         {user ? (
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden lg:flex items-center gap-1">
             {links.map((l) => (
               <NavLink key={l.to} to={l.to} className={navItem}>
                 {({ isActive }) => (
@@ -81,7 +81,7 @@ export default function Navbar() {
                 <div className="w-8 h-8 rounded-full bg-flame-900 text-white flex items-center justify-center text-xs font-bold uppercase">
                   {user.name?.[0] || 'U'}
                 </div>
-                <span className="text-sm text-flame-900 hidden lg:inline">{user.name.split(' ')[0]}</span>
+                <span className="text-sm text-flame-900 hidden lg:inline">{(user.name || 'User').split(' ')[0]}</span>
               </div>
               <button onClick={handleLogout} className="btn-ghost text-sm border-flame-900" aria-label="Log out">
                 <LogOut className="w-4 h-4" />
@@ -89,7 +89,7 @@ export default function Navbar() {
               </button>
               <button
                 onClick={() => setOpen((v) => !v)}
-                className="md:hidden btn-ghost p-2"
+                className="lg:hidden btn-ghost p-2"
                 aria-label="Menu"
               >
                 {open ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -116,7 +116,7 @@ export default function Navbar() {
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
-          className="md:hidden border-t border-flame-50 bg-white"
+          className="lg:hidden border-t border-flame-50 bg-white"
         >
           <div className="px-4 py-3 flex flex-col gap-1">
             {links.map((l) => (

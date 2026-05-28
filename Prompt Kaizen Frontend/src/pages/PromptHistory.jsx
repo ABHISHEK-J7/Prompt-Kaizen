@@ -34,8 +34,8 @@ export default function PromptHistory() {
       if (category && i.category !== category) return false;
       if (!query) return true;
       return (
-        i.scenario.toLowerCase().includes(query) ||
-        i.userPrompt.toLowerCase().includes(query)
+        (i.scenario || '').toLowerCase().includes(query) ||
+        (i.userPrompt || '').toLowerCase().includes(query)
       );
     });
   }, [items, q, category]);
@@ -166,7 +166,7 @@ export default function PromptHistory() {
                       <td className="py-2.5 px-4 font-bold text-flame-900">{r.overallScore}</td>
                       <td className="py-2.5 px-4 whitespace-nowrap">
                         <span className={`badge ${ratingBadgeClass(r.rating)} whitespace-nowrap`}>
-                          {r.rating}
+                          {r.rating || 'Unrated'}
                         </span>
                       </td>
                       <td className="py-2.5 px-4 text-right whitespace-nowrap">

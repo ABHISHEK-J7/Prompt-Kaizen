@@ -8,7 +8,6 @@ const mongoose = require('mongoose');
 const scenarioSchema = new mongoose.Schema(
   {
     category: { type: String, required: true },
-    expectedOutputFormat: { type: String, required: true },
     scenario: { type: String, required: true },
   },
   { _id: false }
@@ -47,5 +46,10 @@ const contestSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// `listAvailable` on the user side queries `Contest.find({allowedEmails: email})`
+// per request; on a large catalogue this would otherwise full-scan every
+// contest doc. An array index makes the lookup O(log N) by index entry count.
+contestSchema.index({ allowedEmails: 1 });
 
 module.exports = mongoose.model('Contest', contestSchema);

@@ -84,9 +84,23 @@ export default function ContestTake() {
   const onSubmit = () => submitNow({ silent: false });
 
   // Best-effort auto-submit fired by the timer when the window is closing.
+  // If the user never typed anything (e.g. tab was open in the background and
+  // forgotten), don't auto-submit empty answers — that would record a 0 and
+  // permanently mark the contest as "submitted", locking them out with a fake
+  // bad score. Only fire auto-submit when at least one answer was started.
+  //
+  // `answersRef.current` is the per-scenario answer MAP — an object keyed by
+  // scenarioIndex, NOT an array — so iterate via Object.values.
   const onTimeExpired = useCallback(() => {
     if (result || submitting) return;
     setTimeUp(true);
+    const hasAnyAnswer = Object.values(answersRef.current || {}).some(
+      (a) => typeof a === 'string' && a.trim().length > 0
+    );
+    if (!hasAnyAnswer) {
+      toast.error('Time is up. No answers were entered, so nothing was submitted.');
+      return;
+    }
     submitNow({ silent: true });
   }, [result, submitting, submitNow]);
 
@@ -225,7 +239,6 @@ export default function ContestTake() {
               <Sparkles className="w-3.5 h-3.5" /> Scenario {currentIdx + 1} of {scenarios.length}
             </span>
             <span className="badge bg-white text-flame-900">{currentScenario.category}</span>
-            <span className="badge bg-cream-300 text-flame-900">{currentScenario.expectedOutputFormat}</span>
           </div>
           <p className="text-[17px] leading-relaxed text-cream-100/95 whitespace-pre-wrap">
             {currentScenario.scenario}
@@ -452,7 +465,7 @@ function ContestResult({ result }) {
               <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <span className="badge bg-flame-900 text-cream-300">Q{a.scenarioIndex + 1}</span>
                 {scenario ? <span className="badge bg-cream-100 text-flame-800 border border-cream-200">{scenario.category}</span> : null}
-                <span className={`badge ${ratingBadgeClass(a.rating)}`}>{a.rating}</span>
+                <span className={`badge ${ratingBadgeClass(a.rating)}`}>{a.rating || 'Unrated'}</span>
                 <span className="ml-auto font-bold text-flame-900 tabular-nums">
                   {a.overallScore}<span className="text-flame-400 text-sm">/100</span>
                 </span>

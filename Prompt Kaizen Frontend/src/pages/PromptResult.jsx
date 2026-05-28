@@ -329,7 +329,7 @@ function OverallScore({ data }) {
         <p className="text-[11px] uppercase tracking-wider text-flame-400 font-semibold">Overall Compatibility</p>
         <p className="mt-1 text-2xl font-bold text-flame-900">{data.overallScore} / 100</p>
         <span className={`mt-2 badge ${ratingBadgeClass(data.rating)}`}>
-          <Trophy className="w-3.5 h-3.5" /> {data.rating}
+          <Trophy className="w-3.5 h-3.5" /> {data.rating || 'Unrated'}
         </span>
         <div className="mt-4 h-3 w-full rounded-full bg-cream-200 overflow-hidden">
           <motion.div
@@ -416,7 +416,6 @@ function OriginalCard({ data }) {
       </div>
       <Row label="Scenario" value={data.scenario} />
       <Row label="Your Prompt" value={data.userPrompt} mono />
-      <Row label="Output Format" value={data.expectedOutputFormat || '—'} />
     </motion.div>
   );
 }

@@ -73,11 +73,14 @@ export default function Dashboard() {
         <ScoreCard title="Average Score"     value={data.average}  suffix="/100" Icon={Sparkles}    delay={0.05} variant="flame" />
         <ScoreCard title="Best Score"        value={data.best}     suffix="/100" Icon={Trophy}      delay={0.10} variant="cream" />
         <ScoreCard title="Lowest Score"      value={data.lowest}   suffix="/100" Icon={TrendingDown} delay={0.15} />
-        <StreakCard
-          dailyStreak={data.dailyStreak ?? 0}
-          bestDailyStreak={data.bestDailyStreak ?? 0}
-          streakFreezes={data.streakFreezes ?? 0}
-        />
+        {/* 5th card fills the empty trailing cell of the 2-col grid below lg. */}
+        <div className="col-span-2 lg:col-span-1">
+          <StreakCard
+            dailyStreak={data.dailyStreak ?? 0}
+            bestDailyStreak={data.bestDailyStreak ?? 0}
+            streakFreezes={data.streakFreezes ?? 0}
+          />
+        </div>
       </div>
 
       <DailyChallengeCard />
@@ -186,7 +189,7 @@ export default function Dashboard() {
                     <td className="py-2.5 px-3 text-flame-800">{r.category}</td>
                     <td className="py-2.5 px-3 max-w-xs truncate text-flame-700" title={r.scenario}>{r.scenario}</td>
                     <td className="py-2.5 px-3 font-bold text-flame-900">{r.overallScore}</td>
-                    <td className="py-2.5 px-3"><span className={`badge ${ratingBadgeClass(r.rating)}`}>{r.rating}</span></td>
+                    <td className="py-2.5 px-3"><span className={`badge ${ratingBadgeClass(r.rating)}`}>{r.rating || 'Unrated'}</span></td>
                     <td className="py-2.5 px-3 text-right">
                       <Link to={`/prompts/${r._id}`} className="btn-ghost text-xs">
                         View <ArrowUpRight className="w-3.5 h-3.5" />
@@ -272,7 +275,12 @@ function LoadingDashboard() {
       <div className="h-8 w-48 bg-flame-50 rounded-lg" />
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-28 rounded-2xl bg-white border border-flame-50 shimmer-bg animate-shimmer" />
+          <div
+            key={i}
+            className={`h-28 rounded-2xl bg-white border border-flame-50 shimmer-bg animate-shimmer ${
+              i === 4 ? 'col-span-2 lg:col-span-1' : ''
+            }`}
+          />
         ))}
       </div>
       <div className="grid lg:grid-cols-2 gap-4">

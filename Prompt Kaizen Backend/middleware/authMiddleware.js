@@ -7,50 +7,85 @@ const FREEZE_EARN_EVERY = 7; // earn one freeze every 7-day streak milestone
 
 /**
  * Updates the user's daily-login streak and streak-freeze inventory. Called
- * once per authenticated request, but only writes when the IST calendar day
- * has actually changed — so each user incurs at most one write per IST day.
+ * fire-and-forget once per authenticated request, but only writes when the
+ * IST calendar day has actually changed — so each user incurs at most one
+ * write per IST day.
+ *
+ * Operates on a freshly-fetched copy of the user document and persists with
+ * `User.updateOne` (not `req.user.save()`), so it never races with the
+ * controller's own save on the same in-memory document. Uses optimistic
+ * concurrency (match on the previous `lastActiveDate`) so two concurrent
+ * requests can't both bump the streak.
  *
  * Streak freezes are earned automatically: every time the streak crosses a
  * multiple of 7, one freeze is added (capped at MAX_FREEZES). If the user
  * misses exactly one day and has at least one freeze, the freeze is auto-spent
  * and the streak continues unbroken. Missing more than one day always resets.
  */
-async function bumpDailyStreak(user) {
+async function bumpDailyStreak(userId) {
   const today = istMidnightToday();
-  const last  = user.lastActiveDate ? new Date(user.lastActiveDate) : null;
+
+  const fresh = await User.findById(userId)
+    .select('lastActiveDate dailyStreak bestDailyStreak streakFreezes')
+    .lean();
+  if (!fresh) return null;
+
+  const last = fresh.lastActiveDate ? new Date(fresh.lastActiveDate) : null;
+  const diff = last ? istDayDiff(last, today) : null;
+  // Already counted today (or clock skew) — return the unchanged values so
+  // callers can refresh their in-memory state without a second DB read.
+  if (diff !== null && diff <= 0) {
+    return {
+      dailyStreak: fresh.dailyStreak || 0,
+      bestDailyStreak: fresh.bestDailyStreak || 0,
+      streakFreezes: fresh.streakFreezes || 0,
+      lastActiveDate: fresh.lastActiveDate,
+    };
+  }
+
+  let newStreak = fresh.dailyStreak || 0;
+  let newFreezes = fresh.streakFreezes || 0;
 
   if (!last) {
-    user.dailyStreak = 1;
-    user.bestDailyStreak = Math.max(user.bestDailyStreak || 0, 1);
-    user.lastActiveDate = today;
-    await user.save();
-    return;
-  }
-
-  const diff = istDayDiff(last, today);
-  if (diff === null || diff <= 0) return; // already counted today (or clock skew)
-
-  if (diff === 1) {
-    user.dailyStreak = (user.dailyStreak || 0) + 1;
-  } else if (diff === 2 && (user.streakFreezes || 0) > 0) {
+    newStreak = 1;
+  } else if (diff === 1) {
+    newStreak = newStreak + 1;
+  } else if (diff === 2 && newFreezes > 0) {
     // Auto-spend one freeze to save the streak.
-    user.streakFreezes -= 1;
-    user.dailyStreak = (user.dailyStreak || 0) + 1;
+    newFreezes -= 1;
+    newStreak = newStreak + 1;
   } else {
-    user.dailyStreak = 1;
+    newStreak = 1;
   }
-
-  user.bestDailyStreak = Math.max(user.bestDailyStreak || 0, user.dailyStreak);
 
   // Earn a freeze every 7th day milestone (7, 14, 21, ...).
-  if (user.dailyStreak > 0 && user.dailyStreak % FREEZE_EARN_EVERY === 0) {
-    if ((user.streakFreezes || 0) < MAX_FREEZES) {
-      user.streakFreezes = (user.streakFreezes || 0) + 1;
-    }
+  if (newStreak > 0 && newStreak % FREEZE_EARN_EVERY === 0 && newFreezes < MAX_FREEZES) {
+    newFreezes += 1;
   }
 
-  user.lastActiveDate = today;
-  await user.save();
+  const newBest = Math.max(fresh.bestDailyStreak || 0, newStreak);
+
+  // Optimistic concurrency: only update if lastActiveDate is still what we
+  // read. Two concurrent calls both reach this point; only the first matches
+  // and writes, the second's matchedCount is 0 (silently OK).
+  await User.updateOne(
+    { _id: userId, lastActiveDate: fresh.lastActiveDate },
+    {
+      $set: {
+        dailyStreak: newStreak,
+        bestDailyStreak: newBest,
+        streakFreezes: newFreezes,
+        lastActiveDate: today,
+      },
+    }
+  );
+
+  return {
+    dailyStreak: newStreak,
+    bestDailyStreak: newBest,
+    streakFreezes: newFreezes,
+    lastActiveDate: today,
+  };
 }
 
 const protect = async (req, res, next) => {
@@ -72,7 +107,24 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ message: 'Not authorized, user not found' });
     }
     req.user = user;
-    bumpDailyStreak(user).catch((e) => console.error('streak update failed:', e.message));
+    // Await the streak bump so the very first request of a new IST day shows
+    // the freshly-bumped value (previously it returned yesterday's count on
+    // the first request of the day, then the second request reflected the
+    // increment). Steady-state cost is one small projection-only read per
+    // authenticated request; the write only fires at the IST day boundary.
+    // Errors are non-fatal — log and proceed so a transient DB hiccup doesn't
+    // lock the user out of every authenticated endpoint.
+    try {
+      const bumped = await bumpDailyStreak(user._id);
+      if (bumped) {
+        req.user.dailyStreak = bumped.dailyStreak;
+        req.user.bestDailyStreak = bumped.bestDailyStreak;
+        req.user.streakFreezes = bumped.streakFreezes;
+        req.user.lastActiveDate = bumped.lastActiveDate;
+      }
+    } catch (e) {
+      console.error('streak update failed:', e.message);
+    }
     next();
   } catch (err) {
     return res.status(401).json({ message: 'Not authorized, token failed' });

@@ -41,10 +41,14 @@ const TONE_KEYWORDS = [
   'serious','witty','warm','authoritative','tone'
 ];
 
+// Specific role / persona words only. Earlier this list also contained
+// generic English words like "audience", "users", "team" — almost any prompt
+// mentions at least one of those, which inflated the Input Parameters score
+// to easy 6/15 for free. Now the prompt has to name an actual audience.
 const AUDIENCE_KEYWORDS = [
   'student','students','principal','hr','recruiter','developer','developers',
-  'customer','customers','client','clients','team','manager','manager','employees',
-  'audience','readers','users','beginners','experts','children','professor','teacher',
+  'customer','customers','client','clients','manager','employees',
+  'readers','beginners','experts','children','professor','teacher',
   'investors','stakeholders'
 ];
 
@@ -90,7 +94,6 @@ function analyzePrompt(input) {
     category = '',
     scenario = '',
     userPrompt = '',
-    expectedOutputFormat = '',
     tone = '',
     targetAudience = '',
     additionalRequirements = '',
@@ -203,18 +206,16 @@ function analyzePrompt(input) {
   if (inputs >= 10) strengths.push('Provides useful input parameters / audience info.');
   else weaknesses.push('Important input parameters are missing.');
 
-  // 6) Output Format (10). Full marks if the format is named explicitly,
-  // either via the dropdown or anywhere inside the prompt text.
-  const formatProvided = !!String(expectedOutputFormat).trim();
-  const formatMentioned =
-    formatProvided ||
-    FORMAT_KEYWORDS.some((k) => promptLower.includes(k));
+  // 6) Output Format (10). The user must state the desired output format
+  // (email / table / bullet points / etc.) inside the prompt text itself —
+  // there is no separate dropdown to fall back on.
+  const formatMentioned = FORMAT_KEYWORDS.some((k) => promptLower.includes(k));
   let outputFormat = 0;
   if (formatMentioned) {
     outputFormat = 10;
     strengths.push('Specifies an output format.');
   } else {
-    missing.push('Expected Output Format');
+    missing.push('Output Format');
     suggestions.push('State the format clearly (e.g., email, table, bullet points).');
   }
 
@@ -223,19 +224,18 @@ function analyzePrompt(input) {
   // full marks. An explicit `additionalRequirements` field also earns full.
   const constraintProvided = !!String(additionalRequirements).trim();
   let constraints = 0;
-  if (constraintProvided || constraintMatchCount >= 7) {
+  if (constraintProvided || constraintMatchCount >= 5) {
     constraints = 10;
     strengths.push('Includes constraints / requirements.');
-  } else if (constraintMatchCount === 4) {
+  } else if (constraintMatchCount >= 3) {
     constraints = 6;
-    strengths.push('Includes at least three constraint / requirement.');
+    strengths.push('Includes several constraints / requirements.');
     suggestions.push('Add more constraints (length, examples, sections...) for full credit.');
-  }else if (constraintMatchCount === 1) {
+  } else if (constraintMatchCount >= 1) {
     constraints = 3;
     strengths.push('Includes at least one constraint / requirement.');
     suggestions.push('Add more constraints (length, examples, sections...) for full credit.');
-  }
-   else {
+  } else {
     missing.push('Constraints');
     suggestions.push('Add constraints such as word limit, sections, or tone limits.');
   }

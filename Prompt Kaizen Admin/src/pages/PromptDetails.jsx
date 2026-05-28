@@ -105,7 +105,7 @@ export default function PromptDetails() {
 
       <Heatmap scores={data.scores} />
 
-      <div className="grid lg:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-3 gap-4">
         <ListCard title="Strengths"           items={data.strengths}        Icon={ThumbsUp}      emptyMsg="No notable strengths detected." tone="positive" />
         <ListCard title="Weaknesses"          items={data.weaknesses}       Icon={ThumbsDown}    emptyMsg="No notable weaknesses."          tone="dark" />
         <ListCard title="Missing Parameters"  items={data.missingParameters} Icon={AlertTriangle} emptyMsg="Nothing missing — great!"        tone="warn" />
@@ -277,7 +277,6 @@ function OriginalCard({ data }) {
       </div>
       <Row label="Scenario" value={data.scenario} />
       <Row label="Your Prompt" value={data.userPrompt} mono />
-      <Row label="Output Format" value={data.expectedOutputFormat || '—'} />
     </motion.div>
   );
 }

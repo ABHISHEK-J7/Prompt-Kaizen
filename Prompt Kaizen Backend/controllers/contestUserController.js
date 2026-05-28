@@ -127,22 +127,31 @@ const startContest = async (req, res) => {
     if (!isLiveNow(contest))
       return res.status(409).json({ message: 'This contest is not open right now. Check the start and end times.' });
 
-    let sub = await ContestSubmission.findOne({
+    // Fast-path: if a submission already exists and is submitted, reject.
+    const existing = await ContestSubmission.findOne({
       contestId: contest._id,
       userId: req.user._id,
-    });
-    if (sub && sub.status === 'submitted')
+    }).lean();
+    if (existing && existing.status === 'submitted')
       return res.status(409).json({ message: 'You have already submitted this contest.' });
 
-    if (!sub) {
-      sub = await ContestSubmission.create({
-        contestId: contest._id,
-        userId: req.user._id,
-        startedAt: new Date(),
-        answers: [],
-        status: 'in_progress',
-      });
-    }
+    // Atomic upsert: two parallel "Start" clicks no longer race the unique
+    // {contestId,userId} index and surface as a 500. `$setOnInsert` only fires
+    // on initial creation; an existing in-progress submission is returned
+    // unchanged.
+    const sub = await ContestSubmission.findOneAndUpdate(
+      { contestId: contest._id, userId: req.user._id },
+      {
+        $setOnInsert: {
+          contestId: contest._id,
+          userId: req.user._id,
+          startedAt: new Date(),
+          answers: [],
+          status: 'in_progress',
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
     return res.json({ submission: sub });
   } catch (err) {
     console.error('startContest error:', err);
@@ -167,7 +176,7 @@ const submitContest = async (req, res) => {
     const existing = await ContestSubmission.findOne({
       contestId: contest._id,
       userId: req.user._id,
-    });
+    }).lean();
     if (existing && existing.status === 'submitted')
       return res.status(409).json({ message: 'You have already submitted this contest.' });
 
@@ -190,12 +199,10 @@ const submitContest = async (req, res) => {
           category: sc.category,
           scenario: sc.scenario,
           userPrompt,
-          expectedOutputFormat: sc.expectedOutputFormat,
         });
         improvedPrompt = generateImprovedPrompt({
           category: sc.category,
           scenario: sc.scenario,
-          expectedOutputFormat: sc.expectedOutputFormat,
         });
       }
 
@@ -218,18 +225,44 @@ const submitContest = async (req, res) => {
       ? Math.round((totalScore / answers.length) * 10) / 10
       : 0;
 
-    const sub =
-      existing ||
-      new ContestSubmission({
-        contestId: contest._id,
-        userId: req.user._id,
-        startedAt: new Date(),
-      });
-    sub.answers = answers;
-    sub.averageScore = averageScore;
-    sub.status = 'submitted';
-    sub.submittedAt = new Date();
-    await sub.save();
+    const finalFields = {
+      answers,
+      averageScore,
+      status: 'submitted',
+      submittedAt: new Date(),
+    };
+
+    // Atomic finalisation. Two concurrent submits used to both read the same
+    // in_progress doc and both call save(), clobbering each other's answers
+    // (leaderboard score became non-deterministic). The findOneAndUpdate below
+    // only matches a doc that is still in_progress (or non-existent if the
+    // user never called start). If we lose the race, return 409.
+    let sub;
+    if (existing) {
+      sub = await ContestSubmission.findOneAndUpdate(
+        { _id: existing._id, status: 'in_progress' },
+        { $set: finalFields },
+        { new: true }
+      );
+      if (!sub) {
+        return res.status(409).json({ message: 'You have already submitted this contest.' });
+      }
+    } else {
+      try {
+        sub = await ContestSubmission.create({
+          contestId: contest._id,
+          userId: req.user._id,
+          startedAt: new Date(),
+          ...finalFields,
+        });
+      } catch (e) {
+        // Unique index collision: a concurrent submit beat us.
+        if (e?.code === 11000) {
+          return res.status(409).json({ message: 'You have already submitted this contest.' });
+        }
+        throw e;
+      }
+    }
 
     return res.json({ submission: sub });
   } catch (err) {
@@ -248,7 +281,12 @@ const getMyResult = async (req, res) => {
       userId: req.user._id,
     }).lean();
     if (!sub) return res.status(404).json({ message: 'No submission found.' });
-    const contest = await Contest.findById(req.params.id).lean();
+    // Project only the contest fields the result UI needs. Critically, never
+    // return `allowedEmails` — that array is the full PII roster of every
+    // invited user and must not leak to other participants.
+    const contest = await Contest.findById(req.params.id)
+      .select('title description scheduledDate startsAt endsAt durationMinutes scenarios status')
+      .lean();
     return res.json({ submission: sub, contest });
   } catch (err) {
     console.error('getMyResult error:', err);
@@ -259,6 +297,20 @@ const getMyResult = async (req, res) => {
 /** A user is allowed to view a contest's leaderboard if they're on its
  *  allowlist — regardless of contest status (so they can also see results
  *  for closed contests). */
+// Mask an email so a participant can recognise their own row but can't read
+// other participants' addresses verbatim. e.g. `john.doe@example.com` →
+// `joh***@example.com`. The caller's own row is passed through unchanged so
+// they always see their full email.
+function maskEmail(email) {
+  if (!email || typeof email !== 'string') return '';
+  const at = email.indexOf('@');
+  if (at <= 0) return '***';
+  const local = email.slice(0, at);
+  const domain = email.slice(at);
+  const visible = local.slice(0, Math.min(3, local.length));
+  return `${visible}***${domain}`;
+}
+
 function isOnAllowlist(contest, email) {
   if (!contest || !Array.isArray(contest.allowedEmails)) return false;
   return contest.allowedEmails.includes(email);
@@ -319,11 +371,12 @@ const getContestLeaderboard = async (req, res) => {
     ]);
 
     const callerId = String(req.user?._id || '');
-    const ranked = rows.map((r, i) => ({
-      ...r,
-      rank: i + 1,
-      isMe: String(r.userId) === callerId,
-    }));
+    const ranked = rows.map((r, i) => {
+      const isMe = String(r.userId) === callerId;
+      // Mask everyone else's email so a participant can't scrape the full
+      // allowlist by hitting the leaderboard. Caller sees their own address.
+      return { ...r, email: isMe ? r.email : maskEmail(r.email), rank: i + 1, isMe };
+    });
 
     return res.json({
       contest: {
@@ -410,11 +463,10 @@ const leaderboard = async (req, res) => {
     ]);
 
     const callerId = String(req.user?._id || '');
-    const ranked = rows.map((r, i) => ({
-      ...r,
-      rank: i + 1,
-      isMe: String(r.userId) === callerId,
-    }));
+    const ranked = rows.map((r, i) => {
+      const isMe = String(r.userId) === callerId;
+      return { ...r, email: isMe ? r.email : maskEmail(r.email), rank: i + 1, isMe };
+    });
 
     return res.json({ leaderboard: ranked, total: ranked.length });
   } catch (err) {

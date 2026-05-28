@@ -3,10 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Trophy, Calendar, Clock, Users as UsersIcon, FileSpreadsheet, Loader2,
-  CheckCircle2, Lock, Trash2, Upload, Send, ShieldCheck, ChevronRight,
+  CheckCircle2, Lock, Trash2, Upload, Send, ShieldCheck, Pencil,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axiosInstance.js';
+import { useDialog } from '../components/Dialog.jsx';
 import { ratingBadgeClass } from '../utils/scoreUtils.js';
 
 const STATUS_BADGE = {
@@ -18,11 +19,15 @@ const STATUS_BADGE = {
 export default function ContestDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const dialog = useDialog();
   const fileInputRef = useRef(null);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
+  // Default to 'append' — the safer mode. Admins must explicitly opt into
+  // 'replace' (which wipes the existing allowlist) and confirm a dialog.
+  const [uploadMode, setUploadMode] = useState('append');
 
   const load = () => {
     setLoading(true);
@@ -37,16 +42,29 @@ export default function ContestDetail() {
     const file = e.target.files?.[0];
     e.target.value = ''; // reset so picking the same file again retriggers
     if (!file) return;
+    if (uploadMode === 'replace') {
+      const currentCount = data?.contest?.allowedEmails?.length || 0;
+      const ok = await dialog.confirm({
+        title: 'Replace the existing allowlist?',
+        message: `This will OVERWRITE the existing allowlist of ${currentCount} email${currentCount === 1 ? '' : 's'} with the contents of the uploaded file.`,
+        confirmLabel: 'Replace allowlist',
+        destructive: true,
+      });
+      if (!ok) return;
+    }
     const fd = new FormData();
     fd.append('file', file);
-    fd.append('mode', 'replace');
+    fd.append('mode', uploadMode);
     try {
       setBusy(true);
       const { data: res } = await api.post(`/admin/contests/${id}/emails`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setUploadResult({ parsed: res.parsed, skipped: res.skipped, total: res.total });
-      toast.success(`Allowlist uploaded · ${res.parsed} parsed`);
+      setUploadResult({ parsed: res.parsed, skipped: res.skipped, total: res.total, capped: res.capped });
+      toast.success(`Allowlist ${uploadMode === 'append' ? 'appended' : 'replaced'} · ${res.parsed} parsed`);
+      if (res.capped) {
+        toast.error('Upload hit the per-file email cap. Some rows from the end of the file were ignored.');
+      }
       load();
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Upload failed.');
@@ -56,7 +74,12 @@ export default function ContestDetail() {
   };
 
   const publish = async () => {
-    if (!confirm('Publish this contest? Eligible users will be able to take it on the scheduled date.')) return;
+    const ok = await dialog.confirm({
+      title: 'Publish this contest?',
+      message: 'Eligible users will be able to take it during the scheduled window.',
+      confirmLabel: 'Publish',
+    });
+    if (!ok) return;
     try {
       setBusy(true);
       await api.post(`/admin/contests/${id}/publish`);
@@ -70,7 +93,13 @@ export default function ContestDetail() {
   };
 
   const close = async () => {
-    if (!confirm('Close this contest? No further submissions will be accepted.')) return;
+    const ok = await dialog.confirm({
+      title: 'Close this contest?',
+      message: 'No further submissions will be accepted.',
+      confirmLabel: 'Close contest',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       setBusy(true);
       await api.post(`/admin/contests/${id}/close`);
@@ -84,7 +113,13 @@ export default function ContestDetail() {
   };
 
   const remove = async () => {
-    if (!confirm('Delete this contest? All submissions will be lost.')) return;
+    const ok = await dialog.confirm({
+      title: 'Delete this contest?',
+      message: 'All scenarios, allowlist entries and submissions will be permanently lost.',
+      confirmLabel: 'Delete contest',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       setBusy(true);
       await api.delete(`/admin/contests/${id}`);
@@ -118,6 +153,11 @@ export default function ContestDetail() {
           <p className="text-flame-500 text-sm">{contest.description || 'No description provided.'}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {contest.status !== 'closed' && (
+            <Link to={`/contests/${contest._id}/edit`} className="btn-ghost text-sm">
+              <Pencil className="w-4 h-4" /> Edit
+            </Link>
+          )}
           {contest.status === 'draft' && (
             <button onClick={publish} disabled={busy} className="btn-primary text-sm">
               <Send className="w-4 h-4" /> Publish
@@ -134,7 +174,7 @@ export default function ContestDetail() {
         </div>
       </motion.div>
 
-      <div className="grid lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <InfoCard
           label="Date (IST)"
           value={new Date(contest.scheduledDate).toLocaleDateString(undefined, {
@@ -172,14 +212,26 @@ export default function ContestDetail() {
             accept=".xlsx,.xls,.csv"
             onChange={onUploadFile}
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={busy || contest.status === 'closed'}
-            className="btn-primary text-sm"
-          >
-            {busy ? <Loader2 className="w-4 h-4 animate-spin-slow" /> : <Upload className="w-4 h-4" />}
-            Upload allowlist
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={uploadMode}
+              onChange={(e) => setUploadMode(e.target.value)}
+              disabled={busy || contest.status === 'closed'}
+              className="input !py-1.5 text-xs max-w-[160px]"
+              title="Append adds to the existing allowlist; Replace wipes and re-uploads."
+            >
+              <option value="append">Append to existing</option>
+              <option value="replace">Replace existing</option>
+            </select>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={busy || contest.status === 'closed'}
+              className="btn-primary text-sm"
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin-slow" /> : <Upload className="w-4 h-4" />}
+              Upload allowlist
+            </button>
+          </div>
         </div>
         {uploadResult ? (
           <div className="text-sm text-flame-700">
@@ -212,7 +264,6 @@ export default function ContestDetail() {
               <div className="flex items-center gap-2 mb-2">
                 <span className="badge bg-flame-900 text-cream-300">Q{i + 1}</span>
                 <span className="badge bg-white text-flame-700 border border-flame-100">{s.category}</span>
-                <span className="badge bg-white text-flame-700 border border-flame-100">{s.expectedOutputFormat}</span>
               </div>
               <p className="text-sm text-flame-800 whitespace-pre-wrap">{s.scenario}</p>
             </li>
@@ -297,7 +348,13 @@ function SubmissionsTable({ submissions, totalScenarios }) {
                     </span>
                   </td>
                   <td className="py-2.5 px-4 text-flame-500 whitespace-nowrap">
-                    {s.submittedAt ? new Date(s.submittedAt).toLocaleString() : '—'}
+                    {s.submittedAt
+                      ? new Date(s.submittedAt).toLocaleString(undefined, {
+                          timeZone: 'Asia/Kolkata',
+                          day: 'numeric', month: 'short', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit', hour12: false,
+                        }) + ' IST'
+                      : '—'}
                   </td>
                 </motion.tr>
               ))}

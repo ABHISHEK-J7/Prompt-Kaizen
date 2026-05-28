@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Trophy, Flame, TrendingUp, Layers, ChevronRight, Calendar } from 'lucide-react';
+import { X, Sparkles, Trophy, Flame, TrendingUp, TrendingDown, Layers, ChevronRight, Calendar } from 'lucide-react';
 import api from '../api/axiosInstance.js';
 
 const STORAGE_KEY = 'pk_weekly_recap_week';
@@ -48,11 +48,15 @@ export default function WeeklyRecapModal() {
     localStorage.setItem(STORAGE_KEY, isoWeekKey(new Date()));
   };
 
-  if (!open || !data) return null;
-
+  // AnimatePresence has to render unconditionally so it can detect the
+  // child's removal and play the exit transition. Putting the `open && data`
+  // guard inside (instead of `return null` outside) lets the modal fade out
+  // when dismissed instead of popping out instantly.
   return (
     <AnimatePresence>
+      {open && data && (
       <motion.div
+        key="weekly-recap"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex items-center justify-center px-4"
       >
@@ -100,7 +104,7 @@ export default function WeeklyRecapModal() {
               <RecapStat Icon={Trophy}    label="Best score"  value={`${data.best}`}   sub="/ 100" />
               <RecapStat Icon={TrendingUp} label="Average"    value={`${data.average}`} sub="/ 100" />
               <RecapStat
-                Icon={data.improvement >= 0 ? TrendingUp : TrendingUp}
+                Icon={data.improvement >= 0 ? TrendingUp : TrendingDown}
                 label="Trend"
                 value={`${data.improvement >= 0 ? '+' : ''}${data.improvement}`}
                 sub="pts"
@@ -149,6 +153,7 @@ export default function WeeklyRecapModal() {
           </div>
         </motion.div>
       </motion.div>
+      )}
     </AnimatePresence>
   );
 }

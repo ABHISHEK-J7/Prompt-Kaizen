@@ -10,14 +10,24 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Endpoints where a 401 is a normal form-validation failure (wrong password,
+// expired OTP, etc.) and must NOT wipe an existing valid session. Without
+// this guard, a logged-in user who opens /login in a second tab and types a
+// wrong password would have their good session silently destroyed.
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/verify-otp', '/auth/resend-otp'];
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err?.response?.status === 401) {
-      localStorage.removeItem('pk_token');
-      localStorage.removeItem('pk_user');
-      if (!window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
+      const requestUrl = err?.config?.url || '';
+      const isAuthEndpoint = AUTH_ENDPOINTS.some((p) => requestUrl.includes(p));
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('pk_token');
+        localStorage.removeItem('pk_user');
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(err);

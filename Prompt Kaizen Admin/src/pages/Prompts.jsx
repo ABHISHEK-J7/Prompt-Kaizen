@@ -60,8 +60,8 @@ export default function Prompts() {
       if (category && p.category !== category) return false;
       if (!query) return true;
       return (
-        p.scenario.toLowerCase().includes(query) ||
-        p.userPrompt.toLowerCase().includes(query) ||
+        (p.scenario || '').toLowerCase().includes(query) ||
+        (p.userPrompt || '').toLowerCase().includes(query) ||
         (p.userId?.name || '').toLowerCase().includes(query) ||
         (p.userId?.email || '').toLowerCase().includes(query)
       );
@@ -178,7 +178,7 @@ export default function Prompts() {
                     <td className="py-2.5 px-4 max-w-xs truncate text-flame-700" title={p.scenario}>{p.scenario}</td>
                     <td className="py-2.5 px-4 font-bold text-flame-900">{p.overallScore}</td>
                     <td className="py-2.5 px-4">
-                      <span className={`badge ${ratingBadgeClass(p.rating)}`}>{p.rating}</span>
+                      <span className={`badge ${ratingBadgeClass(p.rating)}`}>{p.rating || 'Unrated'}</span>
                     </td>
                     <td className="py-2.5 px-4 text-right">
                       <Link to={`/prompts/${p._id}`} className="btn-ghost text-xs">

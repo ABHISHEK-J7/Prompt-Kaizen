@@ -12,10 +12,6 @@ import { useMidnightCountdown } from '../utils/useMidnightCountdown.js';
 import { lockClipboardProps } from '../utils/lockClipboard.js';
 import DailyChallengeCalendar from '../components/DailyChallengeCalendar.jsx';
 
-const FORMATS = [
-  'Paragraph','Email','Table','Bullet Points','Code','Report','Social Media Post','Step-by-step Explanation','Other',
-];
-
 export default function DailyChallenge() {
   const navigate = useNavigate();
   const [challenge, setChallenge] = useState(null);
@@ -26,7 +22,6 @@ export default function DailyChallenge() {
   const [attemptsLoading, setAttemptsLoading] = useState(true);
 
   const [userPrompt, setUserPrompt] = useState('');
-  const [expectedOutputFormat, setExpectedOutputFormat] = useState('');
 
   const fetchChallenge = () => {
     setLoading(true);
@@ -56,7 +51,6 @@ export default function DailyChallenge() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!expectedOutputFormat) return toast.error('Please choose an output format.');
     if (!userPrompt.trim() || userPrompt.trim().length < 5)
       return toast.error('Your prompt is too short (min 5 characters).');
     try {
@@ -65,7 +59,6 @@ export default function DailyChallenge() {
         category: challenge.category,
         scenario: challenge.scenario,
         userPrompt,
-        expectedOutputFormat,
         isDailyChallenge: true,
       });
       toast.success('Challenge submitted!');
@@ -132,8 +125,6 @@ export default function DailyChallenge() {
           submitting={submitting}
           userPrompt={userPrompt}
           onPromptChange={setUserPrompt}
-          expectedOutputFormat={expectedOutputFormat}
-          onFormatChange={setExpectedOutputFormat}
           onSubmit={onSubmit}
           words={words}
         />
@@ -306,8 +297,7 @@ const PROMPT_TIPS = [
 ];
 
 function SubmitForm({
-  submitting, userPrompt, onPromptChange,
-  expectedOutputFormat, onFormatChange, onSubmit, words,
+  submitting, userPrompt, onPromptChange, onSubmit, words,
 }) {
   return (
     <motion.form
@@ -316,18 +306,6 @@ function SubmitForm({
       className="grid lg:grid-cols-12 gap-5"
     >
       <div className="lg:col-span-8 card p-6 space-y-5">
-        <div>
-          <label className="label">Expected Output Format <span className="text-cream-600 ml-0.5">*</span></label>
-          <select
-            value={expectedOutputFormat}
-            onChange={(e) => onFormatChange(e.target.value)}
-            className="input max-w-sm"
-          >
-            <option value="">Select a format</option>
-            {FORMATS.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="label !mb-0">Your Prompt <span className="text-cream-600 ml-0.5">*</span></label>
@@ -423,7 +401,7 @@ function CompletedCard({ challenge }) {
               <span className="text-sm font-medium text-flame-400">/100</span>
             </span>
             <span className={`badge ${ratingBadgeClass(challenge.mySubmission.rating)}`}>
-              {challenge.mySubmission.rating}
+              {challenge.mySubmission.rating || 'Unrated'}
             </span>
           </div>
         ) : null}
@@ -509,7 +487,7 @@ function AttemptsList({ attempts, loading }) {
                     <span className="text-flame-400 text-xs">/100</span>
                   </td>
                   <td className="py-2.5 px-4 whitespace-nowrap">
-                    <span className={`badge ${ratingBadgeClass(a.rating)} whitespace-nowrap`}>{a.rating}</span>
+                    <span className={`badge ${ratingBadgeClass(a.rating)} whitespace-nowrap`}>{a.rating || 'Unrated'}</span>
                   </td>
                   <td className="py-2.5 px-4 text-right whitespace-nowrap">
                     <Link to={`/prompts/${a._id}`} className="btn-ghost text-xs">

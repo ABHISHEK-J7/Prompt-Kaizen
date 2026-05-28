@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Users as UsersIcon, Search, ShieldCheck, Inbox, Upload, Trash2, KeyRound, Loader2, FileSpreadsheet,
+  Users as UsersIcon, Search, ShieldCheck, Inbox, Upload, Trash2, KeyRound, Loader2, FileSpreadsheet, Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axiosInstance.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useDialog } from '../components/Dialog.jsx';
 import { roleBadgeClass } from '../utils/scoreUtils.js';
 
 export default function Users() {
   const { user: me } = useAuth();
+  const dialog = useDialog();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [rowBusyId, setRowBusyId] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -31,11 +34,46 @@ export default function Users() {
     const query = q.trim().toLowerCase();
     if (!query) return users;
     return users.filter(
-      (u) => u.name.toLowerCase().includes(query) || u.email.toLowerCase().includes(query)
+      (u) =>
+        (u.name || '').toLowerCase().includes(query) ||
+        (u.email || '').toLowerCase().includes(query)
     );
   }, [users, q]);
 
   const adminCount = users.filter((u) => u.role === 'admin').length;
+
+  // Hits GET /admin/users/export which streams an .xlsx of (Name, Email) for
+  // every user. We pull it as a Blob, build an object URL, and trigger a
+  // synthetic anchor click so the browser saves it to Downloads. The server
+  // already sets Content-Disposition with a date-stamped filename; we mirror
+  // it client-side as a fallback in case the browser strips that header.
+  const onExportUsers = async () => {
+    try {
+      setExporting(true);
+      const res = await api.get('/admin/users/export', { responseType: 'blob' });
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      // Try to read the server-supplied filename; fall back to a local one.
+      const disposition = res.headers?.['content-disposition'] || '';
+      const match = /filename="?([^"]+)"?/.exec(disposition);
+      const filename = match?.[1] || `prompt-kaizen-users-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Users exported.');
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to export users.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const onUploadFile = async (e) => {
     const file = e.target.files?.[0];
@@ -61,7 +99,13 @@ export default function Users() {
   };
 
   const onDelete = async (u) => {
-    if (!confirm(`Delete ${u.name} (${u.email})? Their prompts and contest submissions will also be deleted. This cannot be undone.`)) return;
+    const ok = await dialog.confirm({
+      title: `Delete ${u.name || 'this user'}?`,
+      message: `${u.email}\n\nTheir prompts and contest submissions will also be deleted. This cannot be undone.`,
+      confirmLabel: 'Delete user',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       setRowBusyId(u._id);
       await api.delete(`/admin/users/${u._id}`);
@@ -75,9 +119,15 @@ export default function Users() {
   };
 
   const onResetPassword = async (u) => {
-    const pwd = prompt(`Set a new password for ${u.email}\n(at least 6 characters)`);
-    if (pwd === null) return; // cancelled
-    if (pwd.length < 6) return toast.error('Password must be at least 6 characters.');
+    const pwd = await dialog.prompt({
+      title: 'Reset password',
+      message: `Set a new password for ${u.email} (at least 6 characters).`,
+      placeholder: 'New password',
+      type: 'password',
+      confirmLabel: 'Reset password',
+      validate: (v) => (String(v || '').length < 6 ? 'Password must be at least 6 characters.' : ''),
+    });
+    if (pwd === null) return;
     try {
       setRowBusyId(u._id);
       await api.post(`/admin/users/${u._id}/reset-password`, { password: pwd });
@@ -110,6 +160,19 @@ export default function Users() {
             className="hidden"
             onChange={onUploadFile}
           />
+          <button
+            type="button"
+            onClick={onExportUsers}
+            disabled={exporting || loading}
+            className="btn-ghost text-sm"
+            title="Download every user's name and email as an Excel file"
+          >
+            {exporting ? (
+              <><Loader2 className="w-4 h-4 animate-spin-slow" /> Exporting…</>
+            ) : (
+              <><Download className="w-4 h-4" /> Export users</>
+            )}
+          </button>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}

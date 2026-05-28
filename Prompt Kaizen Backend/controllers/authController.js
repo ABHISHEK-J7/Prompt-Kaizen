@@ -64,6 +64,13 @@ const register = async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    // Self-registration is for real email addresses only — short usernames
+    // like "admin" are reserved for operator-seeded accounts via seedAdmin.
+    // Without this gate, OTP delivery throws at SMTP for malformed addresses
+    // and an attacker could squat a username before the seed runs.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({ message: 'Please provide a valid email address.' });
+    }
     const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
       return res.status(409).json({ message: 'An account with this email already exists.' });

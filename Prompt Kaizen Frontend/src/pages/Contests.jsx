@@ -97,8 +97,14 @@ function StatsStrip({ stats }) {
       hint: stats.attended > 0 ? `Across ${stats.attended} ${stats.attended === 1 ? 'contest' : 'contests'}` : 'No data yet' },
   ];
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-      {items.map((it, i) => <StatTile key={it.label} {...it} delay={i * 0.04} />)}
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      {items.map((it, i) => (
+        // The 5th item spans the trailing empty cell of the 2-col grid below lg
+        // so the row doesn't leave a blank slot at tablet/mobile widths.
+        <div key={it.label} className={i === 4 ? 'col-span-2 lg:col-span-1' : ''}>
+          <StatTile {...it} delay={i * 0.04} />
+        </div>
+      ))}
     </div>
   );
 }

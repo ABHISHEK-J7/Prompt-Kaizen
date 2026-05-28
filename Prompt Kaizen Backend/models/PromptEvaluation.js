@@ -22,7 +22,6 @@ const promptEvaluationSchema = new mongoose.Schema(
     category: { type: String, required: true },
     scenario: { type: String, required: true },
     userPrompt: { type: String, required: true },
-    expectedOutputFormat: { type: String, default: '' },
     tone: { type: String, default: '' },
     targetAudience: { type: String, default: '' },
     additionalRequirements: { type: String, default: '' },

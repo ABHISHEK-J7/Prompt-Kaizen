@@ -14,7 +14,12 @@ async function main() {
   await connectDB();
 
   const name = process.env.ADMIN_NAME || 'Admin';
-  const email = (process.env.ADMIN_EMAIL || 'admin@promptkaizen.local').toLowerCase().trim();
+  // Default must match .env.example (ADMIN_EMAIL=Admin). When the two
+  // diverged, operators who copied .env.example and ran seed once, then ran
+  // seed again without the env vars, ended up with TWO admin accounts at
+  // different identifiers — and `deleteUser` blocks admin removal, so the
+  // duplicate is painful to clean up.
+  const email = (process.env.ADMIN_EMAIL || 'Admin').toLowerCase().trim();
   const password = process.env.ADMIN_PASSWORD || 'ChangeMe123!';
 
   let user = await User.findOne({ email });

@@ -66,12 +66,15 @@ export default function Contests() {
       </motion.div>
 
       {contests.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <ScoreCard title="Assigned Contests" value={stats.total}      Icon={Layers}       delay={0.00} />
           <ScoreCard title="Scheduled"         value={stats.scheduled}  Icon={Calendar}     delay={0.05} variant="flame" />
           <ScoreCard title="Closed"            value={stats.closed}     Icon={Lock}         delay={0.10} />
           <ScoreCard title="Total Attendees"   value={stats.attendees}  Icon={UsersIcon}    delay={0.15} variant="cream" />
-          <ScoreCard title="Average Score"     value={stats.avgScore}   suffix="/100" Icon={BarChart3} delay={0.20} />
+          {/* 5th card spans the trailing empty cell of the 2-col grid between sm and lg. */}
+          <div className="sm:col-span-2 lg:col-span-1">
+            <ScoreCard title="Average Score"   value={stats.avgScore}   suffix="/100" Icon={BarChart3} delay={0.20} />
+          </div>
         </div>
       )}
 

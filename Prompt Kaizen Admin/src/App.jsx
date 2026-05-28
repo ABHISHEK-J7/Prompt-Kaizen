@@ -11,13 +11,17 @@ import Prompts from './pages/Prompts.jsx';
 import PromptDetails from './pages/PromptDetails.jsx';
 import Contests from './pages/Contests.jsx';
 import ContestCreate from './pages/ContestCreate.jsx';
+import ContestEdit from './pages/ContestEdit.jsx';
 import ContestDetail from './pages/ContestDetail.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 
 function Shell({ children }) {
   const { user } = useAuth();
   return (
-    <div className="min-h-screen flex flex-col">
+    // overflow-x-hidden keeps the page from ever scrolling horizontally; tables
+    // inside individual pages provide their own overflow-x-auto so they scroll
+    // within their card rather than pushing the whole page sideways.
+    <div className="min-h-screen flex flex-col overflow-x-hidden">
       <Navbar />
       <div className="flex-1">
         {user ? (
@@ -51,6 +55,7 @@ function AnimatedRoutes() {
           <Route path="/prompts/:id" element={<ProtectedRoute><PromptDetails /></ProtectedRoute>} />
           <Route path="/contests" element={<ProtectedRoute><Contests /></ProtectedRoute>} />
           <Route path="/contests/new" element={<ProtectedRoute><ContestCreate /></ProtectedRoute>} />
+          <Route path="/contests/:id/edit" element={<ProtectedRoute><ContestEdit /></ProtectedRoute>} />
           <Route path="/contests/:id" element={<ProtectedRoute><ContestDetail /></ProtectedRoute>} />
           <Route
             path="*"

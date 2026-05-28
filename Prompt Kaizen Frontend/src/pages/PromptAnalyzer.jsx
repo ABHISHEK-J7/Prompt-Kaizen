@@ -17,10 +17,6 @@ const CATEGORIES = [
   'Content Creation','Social Media Post','Image Generation Prompt','Other',
 ];
 
-const FORMATS = [
-  'Paragraph','Email','Table','Bullet Points','Code','Report','Social Media Post','Step-by-step Explanation','Other',
-];
-
 const TIPS = [
   'Set a role: "Act as a..."',
   'Mention the audience',
@@ -33,7 +29,6 @@ export default function PromptAnalyzer() {
   const navigate = useNavigate();
   const { user, updateUser } = useAuth();
   const [category, setCategory] = useState('');
-  const [expectedOutputFormat, setExpectedOutputFormat] = useState('');
   const [scenario, setScenario] = useState('');
   const [userPrompt, setUserPrompt] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -70,20 +65,30 @@ export default function PromptAnalyzer() {
     voice.start();
   };
 
+  // Auto-fetch a scenario on category change. AbortController prevents an
+  // older response (e.g. user picked A → B → A quickly) from clobbering the
+  // currently-selected category's scenario when it lands late.
   useEffect(() => {
     if (!category) { setScenario(''); return; }
-    fetchScenario();
+    const controller = new AbortController();
+    fetchScenario(controller.signal);
+    return () => controller.abort();
   }, [category]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchScenario = async () => {
+  const fetchScenario = async (signal) => {
     if (!category) return;
     try {
       setScenarioLoading(true);
       const { data } = await api.get('/prompts/scenario', {
         params: { category, exclude: scenario || undefined },
+        signal,
       });
       setScenario(data.scenario);
     } catch (err) {
+      // Aborted requests are expected when the user changes category quickly;
+      // axios surfaces them as ERR_CANCELED — swallow them, only toast real
+      // failures.
+      if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return;
       toast.error(err?.response?.data?.message || 'Failed to load a scenario.');
     } finally {
       setScenarioLoading(false);
@@ -92,7 +97,6 @@ export default function PromptAnalyzer() {
 
   const validate = () => {
     if (!category) return 'Please select a prompt category.';
-    if (!expectedOutputFormat) return 'Please select an expected output format.';
     if (!scenario) return 'Waiting for a scenario — please select a category first.';
     if (!userPrompt || userPrompt.trim().length < 5) return 'Your prompt is too short (min 5 characters).';
     return '';
@@ -105,10 +109,14 @@ export default function PromptAnalyzer() {
     try {
       setSubmitting(true);
       const { data } = await api.post('/prompts/analyze', {
-        category, scenario, userPrompt, expectedOutputFormat,
+        category, scenario, userPrompt,
         usedDictation: wasDictated,
       });
       if (data?.dictation) updateUser({ dictation: data.dictation });
+      // Reset the dictation flag so a subsequent typed-only prompt doesn't
+      // accidentally re-consume a daily dictation slot if the user navigates
+      // back to this page without remounting the component.
+      setWasDictated(false);
       toast.success('Prompt analyzed!');
       navigate(`/result/${data.evaluation._id}`);
     } catch (err) {
@@ -124,7 +132,7 @@ export default function PromptAnalyzer() {
   };
 
   const words = userPrompt.trim().split(/\s+/).filter(Boolean).length;
-  const ready = scenario && category && expectedOutputFormat;
+  const ready = scenario && category;
 
   return (
     <div className="space-y-6">
@@ -154,28 +162,19 @@ export default function PromptAnalyzer() {
         {/* Left: form */}
         <div className="lg:col-span-2 space-y-5">
           <div className="card p-6 space-y-5">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label className="label">Prompt Category <Required /></label>
-                <select value={category} onChange={(e) => setCategory(e.target.value)} className="input">
-                  <option value="">Select a category</option>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">Expected Output Format <Required /></label>
-                <select value={expectedOutputFormat} onChange={(e) => setExpectedOutputFormat(e.target.value)} className="input">
-                  <option value="">Select a format</option>
-                  {FORMATS.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+            <div>
+              <label className="label">Prompt Category <Required /></label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className="input">
+                <option value="">Select a category</option>
+                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
 
             <ScenarioPanel
               scenario={scenario}
               loading={scenarioLoading}
               hasCategory={!!category}
-              onShuffle={fetchScenario}
+              onShuffle={() => fetchScenario()}
             />
 
             <div>
@@ -251,7 +250,7 @@ export default function PromptAnalyzer() {
               <button
                 type="button"
                 className="btn-ghost"
-                onClick={() => setUserPrompt('')}
+                onClick={() => { setUserPrompt(''); setWasDictated(false); }}
                 disabled={submitting}
               >
                 <Eraser className="w-4 h-4" /> Reset Prompt

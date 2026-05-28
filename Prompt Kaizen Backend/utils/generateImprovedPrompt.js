@@ -1,7 +1,9 @@
 /**
  * Generates an improved version of the user's prompt using a deterministic
- * template, informed by the scenario, category, format, tone, audience and
- * additional requirements.
+ * template, informed by the scenario, category, tone, audience and additional
+ * requirements. Output format is whatever the user stated inside their own
+ * prompt (no separate format field), so the template just asks for a clean,
+ * well-structured response in whichever format the user requested.
  */
 
 const ROLE_BY_CATEGORY = {
@@ -19,18 +21,6 @@ const ROLE_BY_CATEGORY = {
   Other: 'subject-matter expert',
 };
 
-const FORMAT_INSTRUCTIONS = {
-  Email: 'a well-structured email with subject line, greeting, body, and sign-off',
-  Paragraph: 'well-formed paragraphs',
-  Table: 'a clear, well-labeled table',
-  'Bullet Points': 'concise bullet points',
-  Code: 'clean, commented code with explanations',
-  Report: 'a structured report with sections and headings',
-  'Social Media Post': 'an engaging social media post with hooks and hashtags',
-  'Step-by-step Explanation': 'a numbered, step-by-step explanation',
-  Other: 'a clean, well-formatted response',
-};
-
 const cleanScenario = (scenario = '') =>
   String(scenario).trim().replace(/\s+/g, ' ').replace(/[.\s]+$/, '');
 
@@ -38,7 +28,6 @@ function generateImprovedPrompt(input = {}) {
   const {
     category = 'Other',
     scenario = '',
-    expectedOutputFormat = '',
     tone = '',
     targetAudience = '',
     additionalRequirements = '',
@@ -55,12 +44,6 @@ function generateImprovedPrompt(input = {}) {
     ? targetAudience.trim()
     : 'a general audience appropriate for this task';
 
-  const formatText =
-    FORMAT_INSTRUCTIONS[expectedOutputFormat] ||
-    (expectedOutputFormat
-      ? `the ${expectedOutputFormat.toLowerCase()} format`
-      : 'a clean, well-formatted response');
-
   const extras = additionalRequirements
     ? additionalRequirements.trim()
     : 'word limits, clear structure, examples where helpful, and any necessary constraints';
@@ -70,7 +53,7 @@ function generateImprovedPrompt(input = {}) {
     `Your task is to ${task}.`,
     `Use a ${toneText} tone.`,
     `The target audience is ${audienceText}.`,
-    `Generate the output as ${formatText}.`,
+    `Produce the output in the format the user has requested in their prompt (e.g., email, table, bullet points, code, report). If no format is specified, default to a clean, well-structured response.`,
     `Include the following important details: ${extras}.`,
     `Make the response clear, structured, and useful. If anything is ambiguous, state your assumptions before answering.`,
   ].join(' ');

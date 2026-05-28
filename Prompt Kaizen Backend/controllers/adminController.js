@@ -2,6 +2,7 @@ const XLSX = require('xlsx');
 const User = require('../models/User');
 const PromptEvaluation = require('../models/PromptEvaluation');
 const ContestSubmission = require('../models/ContestSubmission');
+const Contest = require('../models/Contest');
 
 // Safety caps for unbounded admin reads. Aggregations would be cleaner long
 // term, but capping the find() result preserves the current response shape
@@ -177,6 +178,14 @@ const deleteUser = async (req, res) => {
     await Promise.all([
       PromptEvaluation.deleteMany({ userId: target._id }),
       ContestSubmission.deleteMany({ userId: target._id }),
+      // Strip the deleted user's email from every contest's allowlist so a
+      // future re-onboarding under the same email doesn't silently inherit
+      // eligibility for old contests, and so the address doesn't linger as
+      // PII on contest documents.
+      Contest.updateMany(
+        { allowedEmails: target.email },
+        { $pull: { allowedEmails: target.email } }
+      ),
     ]);
     await target.deleteOne();
     return res.json({ message: 'User deleted.' });
@@ -195,12 +204,78 @@ const resetUserPassword = async (req, res) => {
     }
     const user = await User.findById(id).select('+password');
     if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    // Block resetting another admin's password — that would let any admin
+    // silently lock out a peer (including the seeded operator). An admin can
+    // still rotate their own password via this endpoint.
+    if (user.role === 'admin' && String(user._id) !== String(req.user._id)) {
+      return res.status(403).json({
+        message: 'You cannot reset another administrator\'s password.',
+      });
+    }
+
     user.password = String(password); // pre-save hook re-hashes
     await user.save();
+
+    // Audit log — destructive admin action. Until a dedicated audit collection
+    // exists, write to console so the line lands in the host's log stream.
+    console.warn(
+      `[ADMIN AUDIT] password reset: actor=${req.user.email} (${req.user._id}) ` +
+      `target=${user.email} (${user._id}) at=${new Date().toISOString()}`
+    );
+
     return res.json({ message: 'Password reset.' });
   } catch (err) {
     console.error('resetUserPassword error:', err);
     return res.status(500).json({ message: 'Failed to reset password.' });
+  }
+};
+
+/**
+ * Streams an .xlsx of every user's Name + Email back to the browser as a
+ * file download. Used by the admin "Export users" button alongside Bulk
+ * upload — the two are symmetric: the export's column shape (Name, Email)
+ * matches the bulk-upload parser, so the file can in principle be re-used
+ * to top up another deployment.
+ */
+const exportUsers = async (req, res) => {
+  try {
+    const users = await User.find()
+      .sort({ createdAt: -1 })
+      .select('name email')
+      .lean();
+
+    const rows = [
+      ['Name', 'Email'],
+      ...users.map((u) => [u.name || '', u.email || '']),
+    ];
+
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    // Reasonable starting column widths so the file is legible without manual
+    // resizing in Excel / Numbers / Sheets.
+    sheet['!cols'] = [{ wch: 24 }, { wch: 36 }];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Users');
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    // Filename includes the IST date so multiple exports don't overwrite each
+    // other in the operator's Downloads folder.
+    const istNow = new Date(Date.now() + 330 * 60 * 1000);
+    const stamp =
+      istNow.getUTCFullYear() + '-' +
+      String(istNow.getUTCMonth() + 1).padStart(2, '0') + '-' +
+      String(istNow.getUTCDate()).padStart(2, '0');
+    const filename = `prompt-kaizen-users-${stamp}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    return res.end(buffer);
+  } catch (err) {
+    console.error('exportUsers error:', err);
+    return res.status(500).json({ message: 'Failed to export users.' });
   }
 };
 
@@ -209,6 +284,7 @@ module.exports = {
   listUsers,
   listPrompts,
   bulkUploadUsers,
+  exportUsers,
   deleteUser,
   resetUserPassword,
 };
