@@ -60,8 +60,17 @@ export default function ContestDetail() {
       const { data: res } = await api.post(`/admin/contests/${id}/emails`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setUploadResult({ parsed: res.parsed, skipped: res.skipped, total: res.total, capped: res.capped });
-      toast.success(`Allowlist ${uploadMode === 'append' ? 'appended' : 'replaced'} · ${res.parsed} parsed`);
+      setUploadResult({
+        parsed: res.parsed, added: res.added, skipped: res.skipped,
+        total: res.total, capped: res.capped, mode: res.mode,
+      });
+      if (res.mode === 'append') {
+        // Append: report how many NEW unique emails actually landed (file
+        // duplicates against the existing list are silently de-duped).
+        toast.success(`Added ${res.added} new email${res.added === 1 ? '' : 's'} · total ${res.total}`);
+      } else {
+        toast.success(`Allowlist replaced · ${res.total} total`);
+      }
       if (res.capped) {
         toast.error('Upload hit the per-file email cap. Some rows from the end of the file were ignored.');
       }
@@ -236,9 +245,20 @@ export default function ContestDetail() {
         {uploadResult ? (
           <div className="text-sm text-flame-700">
             <CheckCircle2 className="inline w-4 h-4 mr-1 text-flame-900" />
-            Parsed <span className="font-bold">{uploadResult.parsed}</span> emails ·
-            skipped <span className="font-bold">{uploadResult.skipped}</span> rows ·
-            total now <span className="font-bold">{uploadResult.total}</span>
+            {uploadResult.mode === 'append' ? (
+              <>
+                Parsed <span className="font-bold">{uploadResult.parsed}</span> emails ·
+                added <span className="font-bold">{uploadResult.added}</span> new ·
+                skipped <span className="font-bold">{uploadResult.skipped}</span> rows ·
+                total now <span className="font-bold">{uploadResult.total}</span>
+              </>
+            ) : (
+              <>
+                Parsed <span className="font-bold">{uploadResult.parsed}</span> emails ·
+                skipped <span className="font-bold">{uploadResult.skipped}</span> rows ·
+                total now <span className="font-bold">{uploadResult.total}</span>
+              </>
+            )}
           </div>
         ) : null}
         {contest.allowedEmails?.length > 0 ? (

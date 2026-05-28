@@ -203,18 +203,31 @@ const uploadAllowedEmails = async (req, res) => {
 
     const { emails, skipped, capped } = parseEmailsFromBuffer(req.file.buffer);
 
-    const mode = (req.body.mode || 'replace').toLowerCase(); // 'replace' or 'append'
+    // Default mode is 'append' — uploading a second file should ADD to the
+    // existing allowlist, never silently wipe it. The admin must explicitly
+    // opt in to 'replace' (the UI does this with a confirm dialog). If the
+    // mode field is missing or unrecognised, we default to the safe behavior
+    // so a buggy or older client can't accidentally destroy the allowlist.
+    const rawMode = String(req.body.mode || '').toLowerCase();
+    const mode = rawMode === 'replace' ? 'replace' : 'append';
+
+    let added = 0;
     if (mode === 'append') {
       const existing = new Set(contest.allowedEmails || []);
+      const before = existing.size;
       for (const e of emails) existing.add(e);
+      added = existing.size - before;
       contest.allowedEmails = Array.from(existing);
     } else {
       contest.allowedEmails = emails;
+      added = emails.length;
     }
     await contest.save();
     return res.json({
       contest,
+      mode,
       parsed: emails.length,
+      added,                       // how many NEW unique emails landed
       skipped,
       capped,
       total: contest.allowedEmails.length,

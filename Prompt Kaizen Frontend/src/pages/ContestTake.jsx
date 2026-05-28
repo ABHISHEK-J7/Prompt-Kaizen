@@ -119,7 +119,10 @@ export default function ContestTake() {
   const scenarios = contest.scenarios || [];
   const submitted = mySubmission?.status === 'submitted';
 
-  // Display states
+  // Display states. The window (endsAt) is a hard cap — once it closes,
+  // even a mid-contest user is cut off. They see whatever they've
+  // submitted as their result; the auto-submit at timeout records the
+  // partial answers they had typed so far.
   if (!live && !submitted) {
     return (
       <NotLiveBanner contest={contest} />
@@ -136,8 +139,14 @@ export default function ContestTake() {
   const currentScenario = scenarios[currentIdx];
   const answered = scenarios.filter((_, i) => (answers[i] || '').trim().length >= 5).length;
 
-  // Wall-clock deadline for the timer — earliest of: window endsAt and
-  // (startedAt + durationMinutes). Fallback to endsAt if either is missing.
+  // Wall-clock deadline for the timer — earliest of:
+  //   - the contest window's hard end (endsAt), and
+  //   - the user's personal cap (startedAt + durationMinutes).
+  // The window is an absolute ceiling: a user who starts at 11:30 with a
+  // 40-min duration in a 10:00–12:00 window gets 30 min (window cap), not
+  // 40 min (which would run past 12:00). A user who starts at 10:00 gets
+  // their full 40 min because the duration cap is sooner than the window.
+  // Fallback to whichever is defined when one is missing.
   const deadline = (() => {
     const candidates = [];
     if (contest.endsAt) candidates.push(new Date(contest.endsAt).getTime());

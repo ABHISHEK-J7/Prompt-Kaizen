@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Trophy, PlusCircle, Calendar, ChevronRight, Inbox,
-  Clock, Users as UsersIcon, Layers, Lock, BarChart3,
+  Clock, Users as UsersIcon, Layers, Lock, BarChart3, Trash2, Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axiosInstance.js';
 import ScoreCard from '../components/ScoreCard.jsx';
+import { useDialog } from '../components/Dialog.jsx';
 
 const STATUS_BADGE = {
   draft:     'bg-white text-flame-700 border border-flame-200',
@@ -16,8 +17,10 @@ const STATUS_BADGE = {
 };
 
 export default function Contests() {
+  const dialog = useDialog();
   const [contests, setContests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -27,6 +30,29 @@ export default function Contests() {
       .finally(() => setLoading(false));
   };
   useEffect(load, []);
+
+  const onDelete = async (c) => {
+    const ok = await dialog.confirm({
+      title: `Delete "${c.title}"?`,
+      message:
+        'All scenarios, allowlist entries, and any submitted answers for this contest will be permanently removed. This cannot be undone.',
+      confirmLabel: 'Delete contest',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      setDeletingId(c._id);
+      await api.delete(`/admin/contests/${c._id}`);
+      toast.success('Contest deleted.');
+      // Remove from the list without a full reload — keeps the page snappy
+      // and avoids a flash of the loading skeleton.
+      setContests((arr) => arr.filter((x) => x._id !== c._id));
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to delete contest.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const stats = useMemo(() => {
     const now = Date.now();
@@ -153,9 +179,24 @@ export default function Contests() {
                       <span className={`badge ${STATUS_BADGE[c.status] || ''}`}>{c.status}</span>
                     </td>
                     <td className="py-2.5 px-4 text-right whitespace-nowrap">
-                      <Link to={`/contests/${c._id}`} className="btn-ghost text-xs">
-                        Manage <ChevronRight className="w-3.5 h-3.5" />
-                      </Link>
+                      <div className="inline-flex items-center gap-1.5">
+                        <Link to={`/contests/${c._id}`} className="btn-ghost text-xs">
+                          Manage <ChevronRight className="w-3.5 h-3.5" />
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(c)}
+                          disabled={deletingId === c._id}
+                          className="btn-danger"
+                          aria-label={`Delete contest ${c.title}`}
+                          title="Delete this contest"
+                        >
+                          {deletingId === c._id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin-slow" />
+                            : <Trash2 className="w-3.5 h-3.5" />}
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </motion.tr>
                 ))}

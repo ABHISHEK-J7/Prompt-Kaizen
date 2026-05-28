@@ -170,6 +170,10 @@ const submitContest = async (req, res) => {
     if (!contest) return res.status(404).json({ message: 'Contest not found.' });
     if (!isEligibleFor(contest, email))
       return res.status(403).json({ message: 'You are not eligible for this contest.' });
+    // The contest window is the absolute ceiling — even a mid-contest user
+    // can't submit after endsAt. The per-user duration is a separate cap on
+    // how long any single user has from startedAt, but the window always
+    // wins when it's the sooner of the two. Matches the frontend timer.
     if (!isLiveNow(contest))
       return res.status(409).json({ message: 'This contest window has not started or has already ended.' });
 
