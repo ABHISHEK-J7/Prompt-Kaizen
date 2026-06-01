@@ -41,7 +41,16 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error('seedAdmin failed:', err);
-  process.exit(1);
-});
+// Only auto-run when invoked directly via `node utils/seedAdmin.js` (which
+// is how `npm run seed:admin` calls it). Guarding against accidental
+// `require('./utils/seedAdmin.js')` from another script — that would
+// silently mutate the admin record (potentially resetting the password
+// when ADMIN_RESET_PASSWORD=true) without anyone meaning to.
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('seedAdmin failed:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = { main };
